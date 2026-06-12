@@ -144,6 +144,85 @@ if not token_db.empty:
             if df is not None and len(df) > 25:
                 df = calculate_all_indicators(df)
                 
+                features = [
+                    'close', 'volume', 'RSI', 'MACD', 'Signal_Line', 
+                    'BB_Dist_Upper', 'BB_Dist_Lower', 'ROC_3', 'Market_Hour', 'Market_Minute'
+                ]
+                
+                X = df[features].values[:-3]
+                y = df['Target'].values[:-3]
+                
+                model = RandomForestClassifier(n_estimators=150, max_depth=5, min_samples_leaf=10, random_state=42)
+                model.fit(X, y)
+                
+                train_predictions = model.predict(X)
+                from sklearn.metrics import accuracy_score
+                historical_accuracy = accuracy_score(y, train_predictions)
+                
+                latest_features = df[features].iloc[-1].values.reshape(1, -1)
+                prediction = model.predict(latest_features)[0]
+                probs = model.predict_proba(latest_features)[0]
+
+                # --- LIVE STATE DETECTOR ---
+                last_candle_time = pd.to_datetime(df['time'].iloc[-1]).date()
+                current_date = datetime.now().date()
+                
+                if last_candle_time < current_date:
+                    st.warning(f"🌙 **Market is Closed.** Showing analysis for the most recent session ending on: `{last_candle_time}`")
+                else:
+                    st.success("🟢 **Market is Live.** Displaying active intraday streams.")
+
+                # --- DASHBOARD SUMMARY ---
+                st.subheader(f"Analysis Dashboard ({timeframe_label} View)")
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Final Closing Price", f"₹{df['close'].iloc[-1]:.2f}")
+                c2.metric("RSI (14m)", f"{df['RSI'].iloc[-1]:.1f}")
+                c3.metric("News Trend", "Bullish" if sentiment > 0.1 else "Bearish" if sentiment < -0.1 else "Neutral")
+                c4.metric("Backtest Accuracy", f"{historical_accuracy * 100:.1f}%")
+
+                st.write("---")
+                
+                horizon_text = "15-MINUTE" if timeframe_label == "5 Minutes" else "45-MINUTE" if timeframe_label == "15 Minutes" else "3-HOUR"
+                
+                if prediction == 1:
+                    st.success(f"🚀 **{horizon_text} TREND OUTLOOK: UP.** Statistical Probability: **{probs[1]*100:.1f}%**")
+                else:
+                    st.error(f"📉 **{horizon_text} TREND OUTLOOK: DOWN.** Statistical Probability: **{probs[0]*100:.1f}%**")
+                
+                # --- INTERACTIVE CHARTS ---
+                st.write("---")
+                st.subheader("📊 Advanced Technical Chart Vectors")
+                
+                chart_df = df.copy()
+                chart_df.set_index('time', inplace=True)
+                
+                st.markdown("### 🔹 Price Action & Bollinger Volatility Bands")
+                st.line_chart(chart_df[['close', 'Upper_Band', 'Lower_Band']])
+                
+                ch_col1, ch_col2 = st.columns(2)
+                with ch_col1:
+                    st.markdown("### 🔹 Relative Strength Index (RSI)")
+                    st.line_chart(chart_df['RSI'])
+                with ch_col2:
+                    st.markdown("### 🔹 MACD vs Signal Crossover")
+                    st.line_chart(chart_df[['MACD', 'Signal_Line']])
+                
+                st.markdown("### 🔹 Momentum Velocity (Rate of Change %)")
+                st.area_chart(chart_df['ROC_3'])
+                
+                st.write("---")
+                st.markdown("### 📋 Session Data Log (Last 5 Candles)")
+                st.dataframe(df[['time', 'open', 'high', 'low', 'close', 'volume', 'RSI', 'MACD', 'ROC_3']].tail(5))
+            else:
+                st.error("Could not load candles. Look above at the error banner to see what the broker is reporting.")
+else:
+    st.error("Setting up database connections, please wait a moment...")
+
+            sentiment = get_news_sentiment(auto_news_symbol)
+            
+            if df is not None and len(df) > 25:
+                df = calculate_all_indicators(df)
+                
                 features =
 
                 prediction = model.predict(latest_features)[0]
