@@ -37,7 +37,7 @@ def load_angel_master_tokens():
 
 token_db = load_angel_master_tokens()
 
-# --- UPGRADED DATA FETCH WITH DISCOVERABLE ERROR LOGGING ---
+# --- DATA FETCH WITH ERROR LOGGING ---
 def get_angel_candlestick_data(exchange, symbol_token, interval_code):
     url = "https://apiconnect.angelone.in/rest/auth/angelbroking/user/v1/getCandleData"
     
@@ -59,7 +59,6 @@ def get_angel_candlestick_data(exchange, symbol_token, interval_code):
     try:
         res = requests.post(url, json=payload, headers=headers).json()
         
-        # If Angel One rejects the request, print the exact reason
         if res.get("status") is False:
             st.error(f"🚫 **Broker Rejection:** {res.get('message', 'Access Denied')} (Code: {res.get('errorCode', 'N/A')})")
             return None
@@ -82,20 +81,17 @@ def get_news_sentiment(news_ticker):
 
 # --- MASTER INDICATOR CALCULATION ENGINE ---
 def calculate_all_indicators(df):
-    # 1. Base Momentum (RSI)
     delta = df['close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / (loss + 1e-9)
     df['RSI'] = 100 - (100 / (1 + rs))
 
-    # 2. Trend & Crossovers (MACD & Signal Line)
     df['EMA12'] = df['close'].ewm(span=12, adjust=False).mean()
     df['EMA26'] = df['close'].ewm(span=26, adjust=False).mean()
     df['MACD'] = df['EMA12'] - df['EMA26']
     df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
-    # 3. Volatility Filters (Bollinger Bands)
     df['MA20'] = df['close'].rolling(window=20).mean()
     df['StdDev20'] = df['close'].rolling(window=20).std()
     df['Upper_Band'] = df['MA20'] + (df['StdDev20'] * 2)
@@ -103,15 +99,12 @@ def calculate_all_indicators(df):
     df['BB_Dist_Upper'] = df['Upper_Band'] - df['close']
     df['BB_Dist_Lower'] = df['close'] - df['Lower_Band']
 
-    # 4. Rate of Change (ROC)
     df['ROC_3'] = ((df['close'] - df['close'].shift(3)) / df['close'].shift(3)) * 100
 
-    # 5. Market Time Context
     df['datetime'] = pd.to_datetime(df['time'])
     df['Market_Hour'] = df['datetime'].dt.hour
     df['Market_Minute'] = df['datetime'].dt.minute
 
-    # 6. Prediction Target Matrix
     df['Target'] = np.where(df['close'].shift(-3) > df['close'], 1, 0)
     return df.dropna()
 
@@ -144,29 +137,15 @@ if not token_db.empty:
     st.info(f"📍 **System Map** ── Interval: `{timeframe_label}` | Symbol: `{trading_symbol}` | Token: `{auto_token}`")
 
     if st.button("Run Analytics & Prediction Engine"):
-        with st.spinner(f"Querying data tables... (Works 24/7)"):
+        with st.spinner("Querying data tables... (Works 24/7)"):
             df = get_angel_candlestick_data(selected_exchange, auto_token, selected_interval_code)
             sentiment = get_news_sentiment(auto_news_symbol)
             
             if df is not None and len(df) > 25:
                 df = calculate_all_indicators(df)
                 
-                features = [
-                    'close', 'volume', 'RSI', 'MACD', 'Signal_Line', 
-                    'BB_Dist_Upper', 'BB_Dist_Lower', 'ROC_3', 'Market_Hour', 'Market_Minute'
-                ]
-                
-                X = df[features].values[:-3]
-                y = df['Target'].values[:-3]
-                
-                model = RandomForestClassifier(n_estimators=150, max_depth=5, min_samples_leaf=10, random_state=42)
-                model.fit(X, y)
-                
-                train_predictions = model.predict(X)
-                from sklearn.metrics import accuracy_score
-                historical_accuracy = accuracy_score(y, train_predictions)
-                
-                latest_features = df[features].iloc[-1].values.reshape(1, -1)
+                features =
+
                 prediction = model.predict(latest_features)[0]
                 probs = model.predict_proba(latest_features)[0]
 
