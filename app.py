@@ -37,24 +37,19 @@ def load_angel_master_tokens():
 
 token_db = load_angel_master_tokens()
 
-# --- 24/7 SMART DATA ENGINE ---
+# --- UPGRADED DATA FETCH WITH DISCOVERABLE ERROR LOGGING ---
 def get_angel_candlestick_data(exchange, symbol_token, interval_code):
     url = "https://apiconnect.angelone.in/rest/auth/angelbroking/user/v1/getCandleData"
     
-    # Dynamically look back up to 30 days. This guarantees that even during long holiday 
-    # streaks or weekends, the app successfully finds a massive block of previous data to process.
     today = datetime.now()
     past_date = today - timedelta(days=30)
-    
-    from_date_str = past_date.strftime("%Y-%m-%d 09:15")
-    to_date_str = today.strftime("%Y-%m-%d 15:30")
     
     payload = {
         "exchange": exchange,
         "symboltoken": symbol_token,
         "interval": interval_code,        
-        "fromdate": from_date_str,   
-        "todate": to_date_str
+        "fromdate": past_date.strftime("%Y-%m-%d 09:15"),   
+        "todate": today.strftime("%Y-%m-%d 15:30")
     }
     headers = {
         "X-PrivateKey": ANGEL_ONE_API_KEY,
@@ -63,12 +58,19 @@ def get_angel_candlestick_data(exchange, symbol_token, interval_code):
     }
     try:
         res = requests.post(url, json=payload, headers=headers).json()
+        
+        # If Angel One rejects the request, print the exact reason
+        if res.get("status") is False:
+            st.error(f"🚫 **Broker Rejection:** {res.get('message', 'Access Denied')} (Code: {res.get('errorCode', 'N/A')})")
+            return None
+            
         if res.get("status") and res.get("data") and len(res["data"]) > 0:
             raw_candles = res["data"]
             df = pd.DataFrame(raw_candles, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
             return df
         return None
-    except:
+    except Exception as e:
+        st.error(f"💥 **Connection Fault:** {str(e)}")
         return None
 
 def get_news_sentiment(news_ticker):
@@ -149,7 +151,6 @@ if not token_db.empty:
             if df is not None and len(df) > 25:
                 df = calculate_all_indicators(df)
                 
-                # Feature pool
                 features = [
                     'close', 'volume', 'RSI', 'MACD', 'Signal_Line', 
                     'BB_Dist_Upper', 'BB_Dist_Lower', 'ROC_3', 'Market_Hour', 'Market_Minute'
@@ -169,13 +170,12 @@ if not token_db.empty:
                 prediction = model.predict(latest_features)[0]
                 probs = model.predict_proba(latest_features)[0]
 
-                # --- LIVE STATE DETECTOR WARNING ---
-                # Check if data corresponds to today or a previous market session
+                # --- LIVE STATE DETECTOR ---
                 last_candle_time = pd.to_datetime(df['time'].iloc[-1]).date()
                 current_date = datetime.now().date()
                 
                 if last_candle_time < current_date:
-                    st.warning(f"🌙 **Market is Closed.** Showing analysis for the most recent trading session ending on: `{last_candle_time}`")
+                    st.warning(f"🌙 **Market is Closed.** Showing analysis for the most recent session ending on: `{last_candle_time}`")
                 else:
                     st.success("🟢 **Market is Live.** Displaying active intraday streams.")
 
@@ -196,7 +196,7 @@ if not token_db.empty:
                 else:
                     st.error(f"📉 **{horizon_text} TREND OUTLOOK: DOWN.** Statistical Probability: **{probs[0]*100:.1f}%**")
                 
-                                # --- INTERACTIVE CHARTS ---
+                # --- INTERACTIVE CHARTS ---
                 st.write("---")
                 st.subheader("📊 Advanced Technical Chart Vectors")
                 
@@ -216,6 +216,15 @@ if not token_db.empty:
                 
                 st.markdown("### 🔹 Momentum Velocity (Rate of Change %)")
                 st.area_chart(chart_df['ROC_3'])
+                
+                st.write("---")
+                st.markdown("### 📋 Session Data Log (Last 5 Candles)")
+                st.dataframe(df[['time', 'open', 'high', 'low', 'close', 'volume', 'RSI', 'MACD', 'ROC_3']].tail(5))
+            else:
+                st.error("Could not load candles. Look above at the error banner to see what the broker is reporting.")
+else:
+    st.error("Setting up database connections, please wait a moment...")
+
                 
                 st.write("---")
                 st.markdown("### 📋 Session Data Log (Last 5 Candles)")
