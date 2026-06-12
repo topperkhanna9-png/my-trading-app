@@ -196,7 +196,7 @@ if not token_db.empty:
                 else:
                     st.error(f"📉 **{horizon_text} TREND OUTLOOK: DOWN.** Statistical Probability: **{probs[0]*100:.1f}%**")
                 
-                # --- INTERACTIVE CHARTS ---
+                                # --- INTERACTIVE CHARTS ---
                 st.write("---")
                 st.subheader("📊 Advanced Technical Chart Vectors")
                 
@@ -222,30 +222,5 @@ if not token_db.empty:
                 st.dataframe(df[['time', 'open', 'high', 'low', 'close', 'volume', 'RSI', 'MACD', 'ROC_3']].tail(5))
             else:
                 st.error("Could not fetch historical data for this token. Verify your Angel One portal configuration or try another stock.")
-else:
-    st.error("Setting up database connections, please wait a moment...")
-
-                # Chart 1: Price Action & Volatility Overlap
-                st.markdown("### 🔹 Price Action & Bollinger Volatility Bands")
-                st.line_chart(chart_df[['close', 'Upper_Band', 'Lower_Band']])
-                
-                # Chart 2: Momentum Analysis (RSI & MACD Panels side by side)
-                ch_col1, ch_col2 = st.columns(2)
-                with ch_col1:
-                    st.markdown("### 🔹 Relative Strength Index (RSI)")
-                    st.line_chart(chart_df['RSI'])
-                with ch_col2:
-                    st.markdown("### 🔹 MACD vs Signal Crossover")
-                    st.line_chart(chart_df[['MACD', 'Signal_Line']])
-                
-                # Chart 3: Velocity & Volume
-                st.markdown("### 🔹 Momentum Velocity (Rate of Change %)")
-                st.area_chart(chart_df['ROC_3'])
-                
-                st.write("---")
-                st.markdown("### 📋 Recent Data Log")
-                st.dataframe(df[['time', 'open', 'high', 'low', 'close', 'volume', 'RSI', 'MACD', 'ROC_3']].tail(5))
-            else:
-                st.warning(f"Not enough historical {timeframe_label} candles available right now. Make sure to query during live trading hours!")
 else:
     st.error("Setting up database connections, please wait a moment...")
